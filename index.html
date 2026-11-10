@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Snow Forecast</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#2f7fd1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Snow">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png">
+<style>
+:root{--bg:#eef4fb;--card:#fff;--text:#12263a;--muted:#5d7287;--accent:#2f7fd1;--bar:#8cc3f5;--line:#d5e2f0}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1824;--card:#16263a;--text:#e6f0fa;--muted:#8fa6bd;--accent:#5aa7ee;--bar:#3b78b5;--line:#25405c}}
+*{box-sizing:border-box}
+body{margin:0 auto;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",sans-serif;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px));max-width:560px}
+h1{font-size:1.4rem;margin:8px 0 4px}
+.sub{color:var(--muted);font-size:.85rem;margin-bottom:14px}
+.row{display:flex;gap:8px}
+select,button{padding:12px;font-size:1rem;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--text)}
+select{flex:1;min-width:0}
+.hero{background:var(--card);border-radius:16px;padding:18px;margin:14px 0;text-align:center;border:1px solid var(--line)}
+.big{font-size:3rem;font-weight:700;color:var(--accent);line-height:1}
+.hero small{display:block;color:var(--muted);margin-top:6px}
+.chart{display:flex;align-items:flex-end;gap:3px;height:150px;margin:14px 0 4px}
+.col{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;height:100%;font-size:.6rem;color:var(--muted)}
+.col span{line-height:1.3}.col span+span{opacity:.8}.bar{width:100%;background:var(--bar);border-radius:6px 6px 0 0;min-height:3px}
+.days{display:grid;gap:8px}
+.day{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px}
+.day .ic{font-size:1.6rem}.day .n{flex:1}.day .n b{display:block}.day .n span{font-size:.8rem;color:var(--muted)}
+.day .amt{font-weight:700;color:var(--accent);text-align:right}.day .amt span{display:block;font-size:.75rem;color:var(--muted);font-weight:400}
+.note{font-size:.75rem;color:var(--muted);margin-top:14px;line-height:1.4}
+</style>
+</head>
+<body>
+<h1>❄️ Snow Forecast</h1>
+<div class="sub" id="sub">Loading…</div>
+<div class="row">
+  <select id="loc" aria-label="Location"></select>
+  <button id="gps" title="Use my location">📍</button>
+</div>
+<div class="hero"><div class="big" id="total">–</div><small id="blurb"></small>
+<div class="chart" id="chart"></div></div>
+<div class="days" id="days"></div>
+<p class="note">Live data from Open-Meteo (model forecast, adjusted to the elevation shown). Forecasts beyond about 7 days are much less certain, and mountain snowfall is hard to predict anyway, so check the resort’s snow report before you go.</p>
+<script>
+const AREAS={
+"Oregon":[
+["Anthony Lakes",44.96,-118.24,2200],["Cooper Spur",45.40,-121.65,1400],["Ferguson Ridge",45.27,-117.17,1700],
+["Hoodoo",44.408,-121.870,1500],["Mt. Ashland",42.08,-122.72,2100],["Mt. Bachelor",43.979,-121.689,2000],
+["Mt. Hood Meadows",45.331,-121.665,1700],["Mt. Hood Skibowl",45.303,-121.775,1100],["Summit Ski Area (Mt. Hood)",45.30,-121.76,1300],
+["Timberline Lodge",45.331,-121.711,1800],["Warner Canyon",42.27,-120.37,1700],["Willamette Pass",43.598,-122.039,1700]],
+"Washington":[
+["49 Degrees North",48.79,-117.57,1300],["Alpental",47.441,-121.419,1000],["Badger Mountain",47.37,-119.85,1000],
+["Bluewood",46.08,-117.86,1500],["Crystal Mountain",46.935,-121.474,1800],["Echo Valley",47.93,-120.18,1100],
+["Hurricane Ridge",47.97,-123.50,1500],["Leavenworth Ski Hill",47.60,-120.65,500],["Loup Loup",48.39,-119.90,1400],
+["Mission Ridge",47.294,-120.400,1500],["Mt. Baker",48.857,-121.668,1300],["Mt. Spokane",47.92,-117.10,1400],
+["Stevens Pass",47.745,-121.089,1300],["Summit at Snoqualmie",47.428,-121.413,900],["White Pass",46.637,-121.391,1400]],
+"California":[
+["Badger Pass",37.66,-119.66,2200],["Bear Mountain",34.21,-116.86,2200],["Bear Valley",38.47,-120.04,2200],
+["Boreal",39.337,-120.350,2200],["China Peak",37.237,-119.200,2200],["Diamond Peak",39.25,-119.92,2100],
+["Dodge Ridge",38.19,-120.00,2000],["Donner Ski Ranch",39.31,-120.33,2100],["Heavenly",38.935,-119.940,2500],
+["Homewood",39.085,-120.160,2000],["June Mountain",37.77,-119.09,2400],["Kirkwood",38.685,-120.065,2500],
+["Mammoth Mountain",37.631,-119.033,2800],["Mountain High",34.37,-117.69,2200],["Mt. Baldy",34.27,-117.65,2400],
+["Mt. Shasta Ski Park",41.32,-122.20,1800],["Northstar",39.274,-120.121,2100],["Palisades Tahoe",39.197,-120.236,2300],
+["Sierra-at-Tahoe",38.80,-120.08,2100],["Sierra Summit",37.32,-119.22,2200],["Snow Summit",34.236,-116.890,2200],
+["Snow Valley",34.22,-117.03,2200],["Soda Springs",39.32,-120.38,2000],["Sugar Bowl",39.304,-120.335,2100],
+["Tahoe Donner",39.35,-120.26,2000]]};
+const LOCS={},sel=document.getElementById("loc"),$=id=>document.getElementById(id);
+for(const st in AREAS){
+  const g=document.createElement("optgroup");g.label=st;
+  AREAS[st].forEach(([n,lat,lon,elev])=>{
+    const k=n+", "+({Oregon:"OR",Washington:"WA",California:"CA"})[st];
+    LOCS[k]={lat,lon,elev};
+    const o=document.createElement("option");o.textContent=n;o.value=k;g.appendChild(o);
+  });
+  sel.appendChild(g);
+}
+sel.value="Willamette Pass, OR";
+try{const sv=localStorage.getItem("snowArea");if(sv&&LOCS[sv])sel.value=sv}catch(_){}
+const icon=(c,s)=>s>=3?"🌨️":s>0?"❄️":c>=95?"⛈️":c>=51?"🌧️":c>=45?"🌫️":c>=3?"☁️":c>=1?"⛅":"☀️";
+async function load(p,label){
+  $("sub").textContent="Loading "+label+"…";
+  const q=new URLSearchParams({latitude:p.lat,longitude:p.lon,elevation:p.elev,
+    daily:"snowfall_sum,temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code",
+    temperature_unit:"fahrenheit",precipitation_unit:"inch",timezone:"auto",forecast_days:14});
+  try{
+    const r=await fetch("https://api.open-meteo.com/v1/forecast?"+q);
+    if(!r.ok)throw new Error(r.status);
+    const d=(await r.json()).daily;
+    const rows=d.time.map((t,i)=>({
+      d:new Date(t+"T12:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"}),
+      w:new Date(t+"T12:00").toLocaleDateString(undefined,{weekday:"narrow"}),
+      n:new Date(t+"T12:00").getDate(),
+      amt:Math.round((d.snowfall_sum[i]||0)*10)/10,
+      p:d.precipitation_probability_max[i]??0,
+      hi:Math.round(d.temperature_2m_max[i]),lo:Math.round(d.temperature_2m_min[i]),
+      c:d.weather_code[i]}));
+    render(rows);
+    $("sub").textContent=label+" · "+Math.round(p.elev*3.281).toLocaleString()+" ft · 14-day outlook";
+    try{localStorage.setItem("snowCache:"+label,JSON.stringify({rows,at:Date.now()}))}catch(_){}
+  }catch(e){
+    let c=null;
+    try{c=JSON.parse(localStorage.getItem("snowCache:"+label))}catch(_){}
+    if(c&&c.rows){
+      render(c.rows);
+      $("sub").textContent=label+" · offline, saved "+new Date(c.at).toLocaleString(undefined,{weekday:"short",hour:"numeric",minute:"2-digit"});
+    }else{
+      $("sub").textContent="Couldn’t load the forecast. Check your connection and try again.";
+    }
+  }
+}
+function render(rows){
+  const tot=rows.reduce((a,b)=>a+b.amt,0),mx=Math.max(...rows.map(r=>r.amt),1);
+  $("total").textContent=tot.toFixed(1)+"\"";
+  $("blurb").textContent=tot>48?"Big storm cycle: powder alert":tot>24?"Heavy snow stretch":tot>8?"Several snowy days ahead":tot>0?"Light snow expected":"Mostly dry stretch";
+  $("chart").innerHTML=rows.map(r=>`<div class="col">${r.amt}<div class="bar" style="height:${r.amt/mx*85}%"></div><span>${r.w}</span><span>${r.n}</span></div>`).join("");
+  $("days").innerHTML=rows.map(r=>`<div class="day"><div class="ic">${icon(r.c,r.amt)}</div><div class="n"><b>${r.d}</b><span>${r.p}% chance · ${r.hi}°F / ${r.lo}°F</span></div><div class="amt">${r.amt}"<span>snow</span></div></div>`).join("");
+}
+sel.addEventListener("change",()=>{
+  try{localStorage.setItem("snowArea",sel.value)}catch(_){}
+  load(LOCS[sel.value],sel.value);
+});
+$("gps").addEventListener("click",()=>{
+  if(!navigator.geolocation)return;
+  navigator.geolocation.getCurrentPosition(
+    pos=>load({lat:pos.coords.latitude,lon:pos.coords.longitude,elev:Math.round(pos.coords.altitude||1500)},"My location"),
+    ()=>{$("sub").textContent="Location access was denied."});
+});
+load(LOCS[sel.value],sel.value);
+if("serviceWorker"in navigator)window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}));
+</script>
+</body>
+</html>
